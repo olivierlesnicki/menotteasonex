@@ -14,6 +14,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import Image from "next/image";
 import { Header } from "@/components/header";
@@ -145,6 +146,9 @@ export default function LeaderboardPage() {
 
       <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
         <DialogContent className="max-w-4xl p-2">
+          <DialogTitle className="sr-only">
+            {selectedImage?.name ?? "Miniature"}
+          </DialogTitle>
           {selectedImage && (
             <div>
               <div className="relative aspect-video">
