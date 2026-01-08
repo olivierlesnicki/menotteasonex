@@ -9,7 +9,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { Captcha } from "@/components/captcha";
-import Image from "next/image";
+import NextImage from "next/image";
 import { Progress } from "@/components/ui/progress";
 
 // Preload an image and return a promise
@@ -161,7 +161,7 @@ export default function Home() {
                     Ta miniature préférée
                   </p>
                   <div className="relative aspect-video rounded-xl overflow-hidden border-2 border-primary">
-                    <Image
+                    <NextImage
                       src={favoriteData.favorite.url}
                       alt="Ta miniature préférée"
                       fill
