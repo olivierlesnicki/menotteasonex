@@ -107,22 +107,28 @@ export const getVisitorFavorite = query({
       }
     }
 
-    // Get all thumbnails sorted by ELO to find rankings
-    const allThumbnails = await ctx.db
-      .query("thumbnails")
-      .withIndex("by_elo")
-      .order("desc")
-      .collect();
+    // Get all thumbnails sorted by win rate to find rankings
+    const allThumbnails = await ctx.db.query("thumbnails").collect();
 
     const totalThumbnails = allThumbnails.length;
     if (totalThumbnails === 0) return null;
 
+    // Sort by win rate descending
+    const sortedThumbnails = allThumbnails.sort((a, b) => {
+      const winRateA = a.totalVotes > 0 ? a.wins / a.totalVotes : 0;
+      const winRateB = b.totalVotes > 0 ? b.wins / b.totalVotes : 0;
+      if (winRateB !== winRateA) {
+        return winRateB - winRateA;
+      }
+      return b.totalVotes - a.totalVotes;
+    });
+
     // Find the favorite thumbnail in the sorted list
-    const favorite = allThumbnails.find((t) => t._id === favoriteId);
+    const favorite = sortedThumbnails.find((t) => t._id === favoriteId);
     if (!favorite) return null;
 
     // Find the rank of the favorite thumbnail
-    const favoriteRank = allThumbnails.findIndex((t) => t._id === favoriteId) + 1;
+    const favoriteRank = sortedThumbnails.findIndex((t) => t._id === favoriteId) + 1;
 
     // Calculate score: 100 if #1, 0 if last
     // Score = 100 * (totalThumbnails - favoriteRank) / (totalThumbnails - 1)
@@ -134,12 +140,16 @@ export const getVisitorFavorite = query({
     // Get storage URL for favorite
     const url = await ctx.storage.getUrl(favorite.storageId);
 
+    const winRate = favorite.totalVotes > 0
+      ? Math.round((favorite.wins / favorite.totalVotes) * 100)
+      : 0;
+
     return {
       favorite: {
         id: favorite._id,
         name: favorite.name,
         url,
-        elo: favorite.elo,
+        winRate,
         rank: favoriteRank,
       },
       algorithmScore,

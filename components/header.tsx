@@ -1,29 +1,12 @@
-"use client";
-
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 export function Header() {
-  const pathname = usePathname();
-  const isLeaderboard = pathname === "/leaderboard";
-
   return (
     <header className="p-4">
-      <div className="container mx-auto flex justify-between items-center">
+      <div className="container mx-auto">
         <Link href="/" className="text-xl font-bold hover:opacity-80 transition-opacity">
           Menotté à son ex
         </Link>
-        <nav className="flex gap-4 items-center">
-          <Button
-            asChild
-            variant={isLeaderboard ? "default" : "outline"}
-            className={cn(isLeaderboard && "pointer-events-none")}
-          >
-            <Link href="/leaderboard">Classement</Link>
-          </Button>
-        </nav>
       </div>
     </header>
   );

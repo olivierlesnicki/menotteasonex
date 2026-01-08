@@ -55,14 +55,23 @@ export const listAllThumbnails = query({
   },
 });
 
-// Get leaderboard (sorted by ELO)
+// Get leaderboard (sorted by win rate)
 export const getLeaderboard = query({
   args: {},
   handler: async (ctx) => {
     const thumbnails = await ctx.db.query("thumbnails").collect();
 
-    // Sort by ELO descending
-    const sorted = thumbnails.sort((a, b) => b.elo - a.elo);
+    // Sort by win rate descending, then by total votes as tiebreaker
+    const sorted = thumbnails.sort((a, b) => {
+      const winRateA = a.totalVotes > 0 ? a.wins / a.totalVotes : 0;
+      const winRateB = b.totalVotes > 0 ? b.wins / b.totalVotes : 0;
+
+      if (winRateB !== winRateA) {
+        return winRateB - winRateA;
+      }
+      // Tiebreaker: more votes = higher rank
+      return b.totalVotes - a.totalVotes;
+    });
 
     return Promise.all(
       sorted.map(async (thumbnail, index) => ({

@@ -190,7 +190,7 @@ export default function Home() {
                     />
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    #{favoriteData.favorite.rank} au classement • {favoriteData.favorite.elo} ELO
+                    #{favoriteData.favorite.rank} au classement • {favoriteData.favorite.winRate}% victoires
                   </p>
                 </div>
 
