@@ -96,7 +96,14 @@ export const getLeaderboard = query({
 export const getNextPair = mutation({
   args: { visitorId: v.string() },
   handler: async (ctx, args) => {
-    const thumbnails = await ctx.db.query("thumbnails").collect();
+    const allThumbnails = await ctx.db.query("thumbnails").collect();
+
+    // Filter out thumbnails that are "decided" - 1000+ votes and <50% win rate
+    const thumbnails = allThumbnails.filter((t) => {
+      if (t.totalVotes < 1000) return true;
+      const winRate = t.wins / t.totalVotes;
+      return winRate >= 0.5;
+    });
 
     if (thumbnails.length < 2) {
       return { status: "not_enough" as const };
