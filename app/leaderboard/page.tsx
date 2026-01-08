@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
@@ -10,12 +11,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+} from "@/components/ui/dialog";
 import Image from "next/image";
 import { Header } from "@/components/header";
 
 export default function LeaderboardPage() {
   const leaderboard = useQuery(api.thumbnails.getLeaderboard);
   const stats = useQuery(api.votes.getVoteStats);
+  const [selectedImage, setSelectedImage] = useState<{
+    url: string;
+    name: string;
+    rank: number;
+    winRate: number;
+  } | null>(null);
 
   if (!leaderboard) {
     return (
@@ -94,13 +105,25 @@ export default function LeaderboardPage() {
                     </TableCell>
                     <TableCell>
                       {item.url && (
-                        <Image
-                          src={item.url}
-                          alt={item.name}
-                          width={120}
-                          height={68}
-                          className="rounded object-cover"
-                        />
+                        <button
+                          onClick={() =>
+                            setSelectedImage({
+                              url: item.url!,
+                              name: item.name,
+                              rank: item.rank,
+                              winRate: item.winRate,
+                            })
+                          }
+                          className="cursor-pointer hover:opacity-80 transition-opacity"
+                        >
+                          <Image
+                            src={item.url}
+                            alt={item.name}
+                            width={120}
+                            height={68}
+                            className="rounded object-cover"
+                          />
+                        </button>
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono">
@@ -119,6 +142,29 @@ export default function LeaderboardPage() {
           </div>
         )}
       </main>
+
+      <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
+        <DialogContent className="max-w-4xl p-2">
+          {selectedImage && (
+            <div>
+              <div className="relative aspect-video">
+                <Image
+                  src={selectedImage.url}
+                  alt={selectedImage.name}
+                  fill
+                  className="object-contain rounded-lg"
+                />
+              </div>
+              <div className="text-center mt-3 text-sm text-muted-foreground">
+                {selectedImage.rank === 1 && "🥇 "}
+                {selectedImage.rank === 2 && "🥈 "}
+                {selectedImage.rank === 3 && "🥉 "}
+                #{selectedImage.rank} • {selectedImage.winRate}% victoires
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
