@@ -16,6 +16,7 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
 import { Header } from "@/components/header";
 
@@ -128,9 +129,7 @@ export default function LeaderboardPage() {
                           </button>
                         )}
                         {item.totalVotes >= 1000 && item.winRate < 50 && (
-                          <span className="text-xs bg-red-500/20 text-red-500 px-2 py-1 rounded-full whitespace-nowrap">
-                            Disqualifié
-                          </span>
+                          <Badge variant="destructive">Disqualifié</Badge>
                         )}
                       </div>
                     </TableCell>
