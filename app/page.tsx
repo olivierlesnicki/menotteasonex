@@ -1,114 +1,209 @@
 "use client";
 
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useVisitor } from "@/hooks/use-visitor";
+import { VotingCard } from "@/components/voting/voting-card";
+import { useState, useCallback, useEffect } from "react";
+import { Id } from "@/convex/_generated/dataModel";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
-import { CountingNumber } from "@/components/animate-ui/primitives/texts/counting-number";
 
-interface YouTubeData {
-  subscriberCount: string;
-  viewCount: string;
-  videoCount: string;
-  title: string;
-  thumbnail: string;
+// Preload an image and return a promise
+function preloadImage(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = reject;
+    img.src = src;
+  });
 }
 
 export default function Home() {
-  const [youtubeData, setYoutubeData] = useState<YouTubeData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { visitorToken, isLoading: visitorLoading, totalVotes } = useVisitor();
+  const [isVoting, setIsVoting] = useState(false);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const [loadedThumbnails, setLoadedThumbnails] = useState<{
+    left: { id: Id<"thumbnails">; url: string | null; name: string };
+    right: { id: Id<"thumbnails">; url: string | null; name: string };
+  } | null>(null);
 
-  const baseSubscribers = 68180;
+  const thumbnails = useQuery(
+    api.thumbnails.getTwoRandomThumbnails,
+    visitorToken ? { visitorId: visitorToken } : "skip"
+  );
+  const castVote = useMutation(api.votes.castVote);
 
+  // Preload images when thumbnails change
   useEffect(() => {
-    const fetchYouTubeData = async () => {
+    if (!thumbnails) {
+      setImagesLoaded(false);
+      setLoadedThumbnails(null);
+      return;
+    }
+
+    const leftUrl = thumbnails.left.url;
+    const rightUrl = thumbnails.right.url;
+
+    if (!leftUrl || !rightUrl) {
+      setImagesLoaded(true);
+      setLoadedThumbnails(thumbnails);
+      return;
+    }
+
+    setImagesLoaded(false);
+
+    Promise.all([preloadImage(leftUrl), preloadImage(rightUrl)])
+      .then(() => {
+        setLoadedThumbnails(thumbnails);
+        setImagesLoaded(true);
+      })
+      .catch((err) => {
+        console.error("Failed to preload images:", err);
+        // Still show images even if preload fails
+        setLoadedThumbnails(thumbnails);
+        setImagesLoaded(true);
+      });
+  }, [thumbnails]);
+
+  const handleVote = useCallback(
+    async (winnerId: Id<"thumbnails">, loserId: Id<"thumbnails">) => {
+      if (!visitorToken || isVoting) return;
+
+      setIsVoting(true);
+      setImagesLoaded(false);
       try {
-        const response = await fetch("/api/youtube");
-        if (!response.ok) {
-          throw new Error("Failed to fetch YouTube data");
-        }
-        const data = await response.json();
-        setYoutubeData(data);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
+        await castVote({
+          visitorId: visitorToken,
+          winnerId,
+          loserId,
+        });
+      } catch (error) {
+        console.error("Vote failed:", error);
+        setImagesLoaded(true);
       } finally {
-        setLoading(false);
+        setIsVoting(false);
       }
-    };
+    },
+    [visitorToken, castVote, isVoting]
+  );
 
-    fetchYouTubeData();
+  if (visitorLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-muted-foreground">Chargement...</div>
+      </div>
+    );
+  }
 
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchYouTubeData, 30000);
+  if (thumbnails === null) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center text-muted-foreground">
+            <p className="text-lg mb-2">
+              Tu as voté sur toutes les combinaisons !
+            </p>
+            <p>
+              Merci pour ta participation. Reviens quand de nouvelles miniatures
+              seront ajoutées.
+            </p>
+            <a
+              href="/leaderboard"
+              className="inline-block mt-4 text-primary hover:underline"
+            >
+              Voir le classement
+            </a>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
-    return () => clearInterval(interval);
-  }, []);
-
-  const currentSubscribers = youtubeData
-    ? parseInt(youtubeData.subscriberCount)
-    : baseSubscribers;
+  if (thumbnails === undefined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-muted-foreground">Chargement...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-svh flex flex-col justify-center items-center relative mx-auto max-w-screen-sm gap-6 md:gap-12 p-6 md:py-24">
-      <div className="text-2xl md:text-4xl font-black">Menotté à son ex</div>
-      <div className="flex w-full border p-6 rounded-xl gap-4 md:flex-row flex-col md:items-center">
-        <div className="flex-1 flex gap-4 items-center">
-          <div>
-            <img
-              src="https://yt3.googleusercontent.com/RwBe-bCmUF3GbDcBWhIMmynMOJswB-1XPawxXkQZ5oxmcLimbzLN1vRKJC3I0ajGGAsfgCJaaA=s160-c-k-c0x00ffffff-no-rj"
-              alt="Le Motif (Nouvelle Chaîne)"
-              className="rounded-full size-12"
+    <div className="min-h-screen flex flex-col">
+      <Header />
+
+      <main className="flex-1 container mx-auto p-4 md:p-8">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold">
+            Quelle miniature est la meilleure ?
+          </h2>
+          <p className="text-muted-foreground">
+            Choisis la miniature sur laquelle tu aurais cliqué.
+          </p>
+        </div>
+
+        {!imagesLoaded || !loadedThumbnails ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 max-w-4xl mx-auto">
+            <VotingCardSkeleton />
+            <VotingCardSkeleton />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 max-w-4xl mx-auto">
+            <VotingCard
+              thumbnail={loadedThumbnails.left}
+              onVote={() =>
+                handleVote(loadedThumbnails.left.id, loadedThumbnails.right.id)
+              }
+              disabled={isVoting}
+            />
+            <VotingCard
+              thumbnail={loadedThumbnails.right}
+              onVote={() =>
+                handleVote(loadedThumbnails.right.id, loadedThumbnails.left.id)
+              }
+              disabled={isVoting}
             />
           </div>
-          <div className="flex-1">
-            <div className="text-sm font-black">Le Motif (Nouvelle Chaîne)</div>
-            <div className="text-sm text-muted-foreground">@lemotif2</div>
-          </div>
-        </div>
-        <Button size="lg" asChild>
-          <a href="https://taap.it/kD81wE">Abonne-toi</a>
-        </Button>
-      </div>
-      <div className="w-full border p-6 md:p-12 rounded-xl flex flex-col items-center justify-center gap-2 md:gap-4">
-        <div className="uppercase text-sm text-muted-foreground">
-          Abonnés en direct
-        </div>
-        {loading ? (
-          <div className="text-4xl md:text-8xl font-black text-muted-foreground">
-            ...
-          </div>
-        ) : error ? (
-          <div className="text-2xl md:text-4xl font-black text-red-500">
-            Erreur
-          </div>
-        ) : (
-          <div className="text-4xl md:text-8xl font-black">
-            <CountingNumber number={currentSubscribers} />
-          </div>
         )}
-      </div>
-      <div className="w-full p-6 md:p-12 bg-muted rounded-xl flex flex-col items-center justify-center gap-2 md:gap-4">
-        <div className="text-center">
-          <div className="uppercase text-sm text-muted-foreground">
-            Cagnotte
-          </div>
-          <div className="text-sm text-muted-foreground">
-            Chaque abonné au dessus de 68180
-          </div>
+
+        <div className="text-center mt-8 text-sm text-muted-foreground">
+          <p>Tes votes : {totalVotes}</p>
         </div>
-        {loading ? (
-          <div className="text-4xl md:text-8xl font-black text-muted-foreground">
-            ...
-          </div>
-        ) : error ? (
-          <div className="text-2xl md:text-4xl font-black text-red-500">
-            Erreur
-          </div>
-        ) : (
-          <div className="text-4xl md:text-8xl font-black">
-            <CountingNumber number={currentSubscribers - 68180} />€
-          </div>
-        )}
+      </main>
+    </div>
+  );
+}
+
+function Header() {
+  return (
+    <header className="p-4">
+      <div className="container mx-auto flex justify-between items-center">
+        <h1 className="text-xl font-bold">Menotté à son ex</h1>
+        <nav className="flex gap-4 items-center">
+          <Button asChild variant="outline">
+            <Link href="/leaderboard">Classement</Link>
+          </Button>
+        </nav>
+      </div>
+    </header>
+  );
+}
+
+function VotingCardSkeleton() {
+  return (
+    <div className="animate-pulse">
+      {/* Thumbnail skeleton */}
+      <div className="aspect-video rounded-xl bg-muted" />
+      {/* Metadata skeleton */}
+      <div className="mt-3 flex gap-3">
+        {/* Avatar skeleton */}
+        <div className="w-9 h-9 rounded-full bg-muted flex-shrink-0" />
+        {/* Text skeleton */}
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-muted rounded w-3/4" />
+          <div className="h-3 bg-muted rounded w-1/3" />
+        </div>
       </div>
     </div>
   );
