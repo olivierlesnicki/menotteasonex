@@ -11,8 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import Image from "next/image";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Header } from "@/components/header";
 
 export default function LeaderboardPage() {
   const leaderboard = useQuery(api.thumbnails.getLeaderboard);
@@ -20,31 +19,39 @@ export default function LeaderboardPage() {
 
   if (!leaderboard) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-muted-foreground">Chargement du classement...</div>
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 container mx-auto p-4 md:p-8">
+          <div className="grid grid-cols-2 gap-4 mb-8 max-w-md">
+            <div className="border rounded-lg p-4 text-center animate-pulse">
+              <div className="h-8 w-16 bg-muted rounded mx-auto mb-2" />
+              <div className="h-4 w-20 bg-muted rounded mx-auto" />
+            </div>
+            <div className="border rounded-lg p-4 text-center animate-pulse">
+              <div className="h-8 w-16 bg-muted rounded mx-auto mb-2" />
+              <div className="h-4 w-20 bg-muted rounded mx-auto" />
+            </div>
+          </div>
+          <div className="space-y-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex items-center gap-4 animate-pulse">
+                <div className="h-6 w-10 bg-muted rounded" />
+                <div className="h-16 w-28 bg-muted rounded" />
+                <div className="flex-1" />
+                <div className="h-5 w-12 bg-muted rounded" />
+                <div className="h-5 w-12 bg-muted rounded" />
+                <div className="h-5 w-12 bg-muted rounded" />
+              </div>
+            ))}
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="p-4">
-        <div className="container mx-auto flex justify-between items-center">
-          <Link href="/" className="text-xl font-bold">
-            Classement
-          </Link>
-          <nav className="flex gap-4">
-            <Button asChild variant="outline">
-              <Link
-                href="/"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Voter
-              </Link>
-            </Button>
-          </nav>
-        </div>
-      </header>
+      <Header />
 
       <main className="flex-1 container mx-auto p-4 md:p-8">
         {stats && (

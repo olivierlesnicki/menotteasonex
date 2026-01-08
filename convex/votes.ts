@@ -75,3 +75,76 @@ export const getVoteStats = query({
     };
   },
 });
+
+// Get visitor's favorite thumbnail and algorithm score
+export const getVisitorFavorite = query({
+  args: { visitorId: v.string() },
+  handler: async (ctx, args) => {
+    // Get all votes by this visitor
+    const visitorVotes = await ctx.db
+      .query("votes")
+      .withIndex("by_visitor", (q) => q.eq("visitorId", args.visitorId))
+      .collect();
+
+    if (visitorVotes.length === 0) {
+      return null;
+    }
+
+    // Count wins per thumbnail
+    const winCounts: Record<string, number> = {};
+    for (const vote of visitorVotes) {
+      const winnerId = vote.winnerId;
+      winCounts[winnerId] = (winCounts[winnerId] || 0) + 1;
+    }
+
+    // Find the favorite (most voted for)
+    let favoriteId = "";
+    let maxWins = 0;
+    for (const [id, wins] of Object.entries(winCounts)) {
+      if (wins > maxWins) {
+        maxWins = wins;
+        favoriteId = id;
+      }
+    }
+
+    // Get all thumbnails sorted by ELO to find rankings
+    const allThumbnails = await ctx.db
+      .query("thumbnails")
+      .withIndex("by_elo")
+      .order("desc")
+      .collect();
+
+    const totalThumbnails = allThumbnails.length;
+    if (totalThumbnails === 0) return null;
+
+    // Find the favorite thumbnail in the sorted list
+    const favorite = allThumbnails.find((t) => t._id === favoriteId);
+    if (!favorite) return null;
+
+    // Find the rank of the favorite thumbnail
+    const favoriteRank = allThumbnails.findIndex((t) => t._id === favoriteId) + 1;
+
+    // Calculate score: 100 if #1, 0 if last
+    // Score = 100 * (totalThumbnails - favoriteRank) / (totalThumbnails - 1)
+    const algorithmScore =
+      totalThumbnails === 1
+        ? 100
+        : Math.round((100 * (totalThumbnails - favoriteRank)) / (totalThumbnails - 1));
+
+    // Get storage URL for favorite
+    const url = await ctx.storage.getUrl(favorite.storageId);
+
+    return {
+      favorite: {
+        id: favorite._id,
+        name: favorite.name,
+        url,
+        elo: favorite.elo,
+        rank: favoriteRank,
+      },
+      algorithmScore,
+      totalThumbnails,
+      timesVotedForFavorite: maxWins,
+    };
+  },
+});

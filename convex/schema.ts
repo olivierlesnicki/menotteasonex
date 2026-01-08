@@ -34,7 +34,7 @@ export default defineSchema({
   visitors: defineTable({
     visitorToken: v.string(),
     totalVotes: v.number(),
-    verified: v.boolean(),
+    verified: v.optional(v.boolean()),
     createdAt: v.number(),
     lastActiveAt: v.number(),
   }).index("by_token", ["visitorToken"]),

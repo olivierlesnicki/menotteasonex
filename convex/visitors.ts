@@ -43,7 +43,7 @@ export const getVisitorStats = query({
       return { totalVotes: 0, verified: false };
     }
 
-    return { totalVotes: visitor.totalVotes, verified: visitor.verified };
+    return { totalVotes: visitor.totalVotes, verified: visitor.verified ?? false };
   },
 });
 
