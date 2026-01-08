@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useVisitor } from "@/hooks/use-visitor";
 import { VotingCard } from "@/components/voting/voting-card";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
 import { Header } from "@/components/header";
@@ -22,6 +22,12 @@ function preloadImage(src: string): Promise<void> {
   });
 }
 
+type PairStatus = "loading" | "voting" | "done" | "not_enough";
+type ThumbnailPair = {
+  left: { id: Id<"thumbnails">; url: string | null; name: string };
+  right: { id: Id<"thumbnails">; url: string | null; name: string };
+};
+
 export default function Home() {
   const {
     visitorToken,
@@ -30,77 +36,93 @@ export default function Home() {
     verified,
     verify,
   } = useVisitor();
-  const [isVoting, setIsVoting] = useState(false);
-  const [imagesLoaded, setImagesLoaded] = useState(false);
-  const [loadedThumbnails, setLoadedThumbnails] = useState<{
-    left: { id: Id<"thumbnails">; url: string | null; name: string };
-    right: { id: Id<"thumbnails">; url: string | null; name: string };
-  } | null>(null);
 
-  const thumbnails = useQuery(
-    api.thumbnails.getTwoRandomThumbnails,
-    visitorToken && verified ? { visitorId: visitorToken } : "skip"
-  );
+  const [status, setStatus] = useState<PairStatus>("loading");
+  const [currentPair, setCurrentPair] = useState<ThumbnailPair | null>(null);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const hasFetchedInitial = useRef(false);
+
+  const getNextPair = useMutation(api.thumbnails.getNextPair);
   const castVote = useMutation(api.votes.castVote);
   const favoriteData = useQuery(
     api.votes.getVisitorFavorite,
-    visitorToken && thumbnails === null ? { visitorId: visitorToken } : "skip"
+    visitorToken && status === "done" ? { visitorId: visitorToken } : "skip"
   );
 
-  // Preload images when thumbnails change
-  useEffect(() => {
-    if (!thumbnails) {
-      setImagesLoaded(false);
-      setLoadedThumbnails(null);
-      return;
-    }
-
-    const leftUrl = thumbnails.left.url;
-    const rightUrl = thumbnails.right.url;
-
-    if (!leftUrl || !rightUrl) {
-      setImagesLoaded(true);
-      setLoadedThumbnails(thumbnails);
-      return;
-    }
+  // Fetch next pair of thumbnails
+  const fetchNextPair = useCallback(async () => {
+    if (!visitorToken) return;
 
     setImagesLoaded(false);
+    setStatus("loading");
 
-    Promise.all([preloadImage(leftUrl), preloadImage(rightUrl)])
-      .then(() => {
-        setLoadedThumbnails(thumbnails);
-        setImagesLoaded(true);
-      })
-      .catch((err) => {
-        console.error("Failed to preload images:", err);
-        setLoadedThumbnails(thumbnails);
-        setImagesLoaded(true);
-      });
-  }, [thumbnails]);
+    try {
+      const result = await getNextPair({ visitorId: visitorToken });
+
+      if (result.status === "done") {
+        setStatus("done");
+        setCurrentPair(null);
+        return;
+      }
+
+      if (result.status === "not_enough") {
+        setStatus("not_enough");
+        setCurrentPair(null);
+        return;
+      }
+
+      // Preload images
+      const leftUrl = result.left.url;
+      const rightUrl = result.right.url;
+
+      if (leftUrl && rightUrl) {
+        try {
+          await Promise.all([preloadImage(leftUrl), preloadImage(rightUrl)]);
+        } catch (err) {
+          console.error("Failed to preload images:", err);
+        }
+      }
+
+      setCurrentPair({ left: result.left, right: result.right });
+      setImagesLoaded(true);
+      setStatus("voting");
+    } catch (error) {
+      console.error("Failed to fetch pair:", error);
+      setStatus("not_enough");
+    }
+  }, [visitorToken, getNextPair]);
+
+  // Fetch initial pair when verified
+  useEffect(() => {
+    if (visitorToken && verified && !hasFetchedInitial.current) {
+      hasFetchedInitial.current = true;
+      fetchNextPair();
+    }
+  }, [visitorToken, verified, fetchNextPair]);
 
   const handleVote = useCallback(
     async (winnerId: Id<"thumbnails">, loserId: Id<"thumbnails">) => {
-      if (!visitorToken || isVoting) return;
+      if (!visitorToken || status !== "voting") return;
 
-      setIsVoting(true);
       setImagesLoaded(false);
+
       try {
         await castVote({
           visitorId: visitorToken,
           winnerId,
           loserId,
         });
+        // Fetch next pair after successful vote
+        await fetchNextPair();
       } catch (error) {
         console.error("Vote failed:", error);
         setImagesLoaded(true);
-      } finally {
-        setIsVoting(false);
       }
     },
-    [visitorToken, castVote, isVoting]
+    [visitorToken, castVote, fetchNextPair, status]
   );
 
-  // Loading state - show skeleton
+  // Loading visitor state - show skeleton
   if (visitorLoading) {
     return (
       <div className="min-h-screen flex flex-col">
@@ -131,9 +153,8 @@ export default function Home() {
     );
   }
 
-  // All combinations voted
-  if (thumbnails === null) {
-    // Get algorithm label based on score
+  // All combinations voted - show results
+  if (status === "done") {
     const getAlgorithmLabel = (score: number) => {
       if (score >= 90) return { label: "Génie", emoji: "🧠" };
       if (score >= 70) return { label: "Expert", emoji: "🎯" };
@@ -209,29 +230,22 @@ export default function Home() {
     );
   }
 
-  // Loading thumbnails
-  if (thumbnails === undefined) {
+  // Not enough thumbnails
+  if (status === "not_enough") {
     return (
       <div className="min-h-screen flex flex-col">
         <Header />
-        <main className="flex-1 container mx-auto p-4 md:p-8">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold">
-              Quelle miniature est la meilleure ?
-            </h2>
-            <p className="text-muted-foreground">
-              Choisis la miniature sur laquelle tu aurais cliqué.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 max-w-4xl mx-auto">
-            <VotingCardSkeleton />
-            <VotingCardSkeleton />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center text-muted-foreground">
+            <p className="text-lg">Pas assez de miniatures pour voter.</p>
+            <p>Reviens plus tard !</p>
           </div>
         </main>
       </div>
     );
   }
 
+  // Loading or voting
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -246,7 +260,7 @@ export default function Home() {
           </p>
         </div>
 
-        {!imagesLoaded || !loadedThumbnails ? (
+        {!imagesLoaded || !currentPair ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 max-w-4xl mx-auto">
             <VotingCardSkeleton />
             <VotingCardSkeleton />
@@ -254,18 +268,18 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 max-w-4xl mx-auto">
             <VotingCard
-              thumbnail={loadedThumbnails.left}
+              thumbnail={currentPair.left}
               onVote={() =>
-                handleVote(loadedThumbnails.left.id, loadedThumbnails.right.id)
+                handleVote(currentPair.left.id, currentPair.right.id)
               }
-              disabled={isVoting}
+              disabled={status !== "voting"}
             />
             <VotingCard
-              thumbnail={loadedThumbnails.right}
+              thumbnail={currentPair.right}
               onVote={() =>
-                handleVote(loadedThumbnails.right.id, loadedThumbnails.left.id)
+                handleVote(currentPair.right.id, currentPair.left.id)
               }
-              disabled={isVoting}
+              disabled={status !== "voting"}
             />
           </div>
         )}

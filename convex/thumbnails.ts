@@ -83,29 +83,27 @@ export const getLeaderboard = query({
 });
 
 // Get two random thumbnails for voting (excluding pairs already voted by this visitor)
-export const getTwoRandomThumbnails = query({
-  args: { visitorId: v.optional(v.string()) },
+// Using mutation instead of query to avoid reactivity issues when others vote
+export const getNextPair = mutation({
+  args: { visitorId: v.string() },
   handler: async (ctx, args) => {
     const thumbnails = await ctx.db.query("thumbnails").collect();
 
     if (thumbnails.length < 2) {
-      return null;
+      return { status: "not_enough" as const };
     }
 
     // Get all votes by this visitor to exclude already-seen pairs
     const votedPairs = new Set<string>();
-    const visitorId = args.visitorId;
-    if (visitorId) {
-      const visitorVotes = await ctx.db
-        .query("votes")
-        .withIndex("by_visitor", (q) => q.eq("visitorId", visitorId))
-        .collect();
+    const visitorVotes = await ctx.db
+      .query("votes")
+      .withIndex("by_visitor", (q) => q.eq("visitorId", args.visitorId))
+      .collect();
 
-      // Create a set of pair keys (sorted IDs to handle both directions)
-      for (const vote of visitorVotes) {
-        const pairKey = [vote.winnerId, vote.loserId].sort().join("-");
-        votedPairs.add(pairKey);
-      }
+    // Create a set of pair keys (sorted IDs to handle both directions)
+    for (const vote of visitorVotes) {
+      const pairKey = [vote.winnerId, vote.loserId].sort().join("-");
+      votedPairs.add(pairKey);
     }
 
     // Generate all possible pairs
@@ -119,9 +117,9 @@ export const getTwoRandomThumbnails = query({
       }
     }
 
-    // If all pairs have been voted on, return null (visitor has voted on everything)
+    // If all pairs have been voted on, return done status
     if (allPairs.length === 0) {
-      return null;
+      return { status: "done" as const };
     }
 
     // Pick a random pair from available pairs
@@ -134,6 +132,7 @@ export const getTwoRandomThumbnails = query({
     const right = swap ? first : second;
 
     return {
+      status: "ok" as const,
       left: {
         id: left._id,
         url: await ctx.storage.getUrl(left.storageId),
