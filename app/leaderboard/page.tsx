@@ -105,27 +105,34 @@ export default function LeaderboardPage() {
                       {item.rank > 3 && `#${item.rank}`}
                     </TableCell>
                     <TableCell>
-                      {item.url && (
-                        <button
-                          onClick={() =>
-                            setSelectedImage({
-                              url: item.url!,
-                              name: item.name,
-                              rank: item.rank,
-                              winRate: item.winRate,
-                            })
-                          }
-                          className="cursor-pointer hover:opacity-80 transition-opacity"
-                        >
-                          <Image
-                            src={item.url}
-                            alt={item.name}
-                            width={120}
-                            height={68}
-                            className="rounded object-cover"
-                          />
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {item.url && (
+                          <button
+                            onClick={() =>
+                              setSelectedImage({
+                                url: item.url!,
+                                name: item.name,
+                                rank: item.rank,
+                                winRate: item.winRate,
+                              })
+                            }
+                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                          >
+                            <Image
+                              src={item.url}
+                              alt={item.name}
+                              width={120}
+                              height={68}
+                              className="rounded object-cover"
+                            />
+                          </button>
+                        )}
+                        {item.totalVotes >= 1000 && item.winRate < 50 && (
+                          <span className="text-xs bg-red-500/20 text-red-500 px-2 py-1 rounded-full whitespace-nowrap">
+                            Disqualifié
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {item.elo}
