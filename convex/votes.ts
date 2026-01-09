@@ -66,11 +66,12 @@ export const castVote = mutation({
 export const getVoteStats = query({
   args: {},
   handler: async (ctx) => {
-    const votes = await ctx.db.query("votes").collect();
+    // Get visitors and sum their totalVotes instead of counting all vote documents
     const visitors = await ctx.db.query("visitors").collect();
+    const totalVotes = visitors.reduce((sum, v) => sum + v.totalVotes, 0);
 
     return {
-      totalVotes: votes.length,
+      totalVotes,
       totalVisitors: visitors.length,
     };
   },
